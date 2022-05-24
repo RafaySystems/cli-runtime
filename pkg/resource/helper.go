@@ -19,6 +19,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -82,7 +83,10 @@ func (m *Helper) Get(namespace, name string) (runtime.Object, error) {
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(m.Resource).
 		Name(name)
-	return req.Do(context.TODO()).Get()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	return req.Do(ctx).Get()
 }
 
 func (m *Helper) List(namespace, apiVersion string, options *metav1.ListOptions) (runtime.Object, error) {
@@ -90,7 +94,9 @@ func (m *Helper) List(namespace, apiVersion string, options *metav1.ListOptions)
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(m.Resource).
 		VersionedParams(options, metav1.ParameterCodec)
-	return req.Do(context.TODO()).Get()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	return req.Do(ctx).Get()
 }
 
 // FollowContinue handles the continue parameter returned by the API server when using list
@@ -174,13 +180,16 @@ func (m *Helper) DeleteWithOptions(namespace, name string, options *metav1.Delet
 		options.DryRun = []string{metav1.DryRunAll}
 	}
 
-	return m.RESTClient.Delete().
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	obj, err := m.RESTClient.Delete().
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(m.Resource).
 		Name(name).
 		Body(options).
-		Do(context.TODO()).
+		Do(ctx).
 		Get()
+	return obj, err
 }
 
 func (m *Helper) Create(namespace string, modify bool, obj runtime.Object) (runtime.Object, error) {
@@ -215,13 +224,16 @@ func (m *Helper) CreateWithOptions(namespace string, modify bool, obj runtime.Ob
 }
 
 func (m *Helper) createResource(c RESTClient, resource, namespace string, obj runtime.Object, options *metav1.CreateOptions) (runtime.Object, error) {
-	return c.Post().
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	obj, err := c.Post().
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(resource).
 		VersionedParams(options, metav1.ParameterCodec).
 		Body(obj).
-		Do(context.TODO()).
+		Do(ctx).
 		Get()
+	return obj, err
 }
 func (m *Helper) Patch(namespace, name string, pt types.PatchType, data []byte, options *metav1.PatchOptions) (runtime.Object, error) {
 	if options == nil {
@@ -233,13 +245,17 @@ func (m *Helper) Patch(namespace, name string, pt types.PatchType, data []byte, 
 	if m.FieldManager != "" {
 		options.FieldManager = m.FieldManager
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
 	return m.RESTClient.Patch(pt).
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(m.Resource).
 		Name(name).
 		VersionedParams(options, metav1.ParameterCodec).
 		Body(data).
-		Do(context.TODO()).
+		Do(ctx).
 		Get()
 }
 
@@ -260,8 +276,10 @@ func (m *Helper) Replace(namespace, name string, overwrite bool, obj runtime.Obj
 		return m.replaceResource(c, m.Resource, namespace, name, obj, options)
 	}
 	if version == "" && overwrite {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
 		// Retrieve the current version of the object to overwrite the server object
-		serverObj, err := c.Get().NamespaceIfScoped(namespace, m.NamespaceScoped).Resource(m.Resource).Name(name).Do(context.TODO()).Get()
+		serverObj, err := c.Get().NamespaceIfScoped(namespace, m.NamespaceScoped).Resource(m.Resource).Name(name).Do(ctx).Get()
 		if err != nil {
 			// The object does not exist, but we want it to be created
 			return m.replaceResource(c, m.Resource, namespace, name, obj, options)
@@ -279,12 +297,15 @@ func (m *Helper) Replace(namespace, name string, overwrite bool, obj runtime.Obj
 }
 
 func (m *Helper) replaceResource(c RESTClient, resource, namespace, name string, obj runtime.Object, options *metav1.UpdateOptions) (runtime.Object, error) {
-	return c.Put().
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	obj, err := c.Put().
 		NamespaceIfScoped(namespace, m.NamespaceScoped).
 		Resource(resource).
 		Name(name).
 		VersionedParams(options, metav1.ParameterCodec).
 		Body(obj).
-		Do(context.TODO()).
+		Do(ctx).
 		Get()
+	return obj, err
 }
